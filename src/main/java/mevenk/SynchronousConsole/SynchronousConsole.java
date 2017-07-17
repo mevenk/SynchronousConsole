@@ -21,9 +21,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
@@ -59,6 +59,7 @@ public class SynchronousConsole {
 	private JLabel lblSelectedfile;
 	private JButton btnParseFile;
 	private JFileChooser fileChooser;
+	private static File fileChooserCurrentDirectory = new File(SynchronousConsoleUtil.USER_HOME_DIRECTORY_PATH);
 
 	private File selectedFile;
 
@@ -80,6 +81,7 @@ public class SynchronousConsole {
 			System.setErr(resultTextPanePrintStream);
 			System.out.println("Welcome, " + SynchronousConsoleUtil.USER_NAME);
 			System.out.println(new Date());
+			System.out.println(LINE_SEPARATOR + "Select Text files only for accurate result.");
 
 			SwingUtilities.invokeLater(new Runnable() {
 
@@ -151,6 +153,7 @@ public class SynchronousConsole {
 
 				fileChooser = new JFileChooser();
 				fileChooser.setMultiSelectionEnabled(false);
+				fileChooser.setCurrentDirectory(fileChooserCurrentDirectory);
 				fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
 
 				int fileChooserReturnVal = fileChooser.showOpenDialog(frameSynchronousConsole);
@@ -158,8 +161,8 @@ public class SynchronousConsole {
 					selectedFile = fileChooser.getSelectedFile();
 					lblSelectedfile.setText(selectedFile.getName());
 					lblSelectedfile.setToolTipText(selectedFile.getPath());
+					fileChooserCurrentDirectory = fileChooser.getCurrentDirectory();
 				}
-
 			}
 		});
 		btnSelectFile.setFont(new Font("Tahoma", Font.BOLD, 12));
@@ -185,19 +188,21 @@ public class SynchronousConsole {
 				System.out.println("Selected File : " + selectedFile.getPath());
 
 				try {
-					String mimeType = Files.probeContentType(
-							FileSystems.getDefault().getPath(selectedFile.getParent(), selectedFile.getName()));
-					System.out.println("MIME Type : " + mimeType);
+					String mimeType = Files.probeContentType(selectedFile.toPath());
 					if (mimeType == null || !mimeType.contains("text")) {
-						System.out.println("Text File Required !!");
-						return;
+						if (JOptionPane.showConfirmDialog(frameSynchronousConsole,
+								"MIME Type : " + mimeType + LINE_SEPARATOR + "Proceed ?", selectedFile.getName(),
+								JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION) {
+							return;
+						}
 					}
 				} catch (Exception exception) {
+					System.out.println("ERROR !!" + LINE_SEPARATOR);
 					exception.printStackTrace();
+					return;
 				}
 
 				new FileParseInBackground().execute();
-
 			}
 		});
 		btnParseFile.setFont(new Font("Tahoma", Font.BOLD, 12));
@@ -273,72 +278,98 @@ public class SynchronousConsole {
 		});
 	}
 
-	class FileParseInBackground extends SwingWorker<Void, Void> {
+	class FileParseInBackground extends SwingWorker<Long, Void> {
 
 		@Override
-		protected Void doInBackground() {
+		protected Long doInBackground() throws Exception {
 
 			keepWaiting();
 
-			try {
+			double bytes = selectedFile.length();
 
-				int noOfLines = SynchronousConsoleUtil.lineCount(selectedFile);
+			double size = 0;
+			String unitType = "";
 
-				boolean percentageDisplayRequired = false;
-
-				if (noOfLines != -1) {
-					percentageDisplayRequired = true;
-				} else {
-					System.out.println("Line Parse Percentage Display Error !!");
-				}
-
-				int counter = 0;
-				int percentComplete = 0;
-				int previousPercent = 0;
-
-				String fileLine = "";
-				BufferedReader lineBufferedReader = new BufferedReader(new FileReader(selectedFile));
-				StringBuffer lineStringBuffer = new StringBuffer(fileLine);
-
-				while ((fileLine = lineBufferedReader.readLine()) != null) {
-					lineStringBuffer.append(fileLine + LINE_SEPARATOR);
-
-					percentComplete = (int) Math.floor((++counter) * 100 / noOfLines);
-
-					// Percentage Display
-
-					if (percentComplete != previousPercent) {
-						progressBar.setValue((int) percentComplete);
-						if (percentageDisplayRequired) {
-							printOnSameLine("Please Wait [" + percentComplete + "%]");
-						}
-					}
-					previousPercent = percentComplete;
-
-					// Percentage Display - END
-				}
-
-				lineBufferedReader.close();
-
-				progressBar.setString("Complete !");
-
-				if (percentageDisplayRequired) {
-					removeLastLine();
-					System.out.println();
-				}
-
-				System.out.println("No of Lines : " + noOfLines);
-
-			} catch (Exception exception) {
-				exception.printStackTrace();
-				System.out.println("Error !");
+			if (bytes < 1024) {
+				size = bytes;
+				unitType = "B";
+			} else if (bytes < 1048576) {
+				size = bytes / 1204;
+				unitType = "KB";
+			} else if (bytes < 1073741824) {
+				size = bytes / 1024 / 1024;
+				unitType = "MB";
+			} else {
+				size = bytes / 1024 / 1024 / 1024;
+				unitType = "GB";
 			}
 
-			return null;
+			System.out.println("Size : " + Math.floor(size) + " " + unitType);
+
+			printRemovableLine("Counting Lines...");
+
+			int noOfLines = SynchronousConsoleUtil.lineCount(selectedFile);
+			removeLastLine();
+			System.out.println();
+
+			boolean percentageDisplayRequired = false;
+
+			if (noOfLines != -1) {
+				percentageDisplayRequired = true;
+				System.out.println("No of Lines : " + noOfLines);
+			} else {
+				System.out.println("Line Count Error !!");
+			}
+
+			int counter = 0;
+			int percentComplete = 0;
+			int previousPercent = 0;
+
+			long startTime = new Date().getTime();
+
+			BufferedReader lineBufferedReader = new BufferedReader(new FileReader(selectedFile));
+
+			while (lineBufferedReader.readLine() != null) {
+
+				percentComplete = ((++counter) * 100) / noOfLines;
+
+				// Percentage Display
+
+				if (percentComplete != previousPercent) {
+					progressBar.setValue((int) percentComplete);
+					if (percentageDisplayRequired) {
+						printRemovableLine("Please Wait [" + percentComplete + "%]");
+					}
+				}
+				previousPercent = percentComplete;
+
+				// Percentage Display - END
+			}
+
+			long endTime = new Date().getTime();
+
+			lineBufferedReader.close();
+
+			if (percentageDisplayRequired) {
+				removeLastLine();
+			}
+
+			return endTime - startTime;
 		}
 
 		@Override
 		public void done() {
+			System.out.println();
+			try {
+				long timeTakenInMillis = get();
+				progressBar.setString("Complete !");
+				System.out.println("Time Taken : " + TimeUnit.MILLISECONDS.toSeconds(timeTakenInMillis) + " sec ("
+						+ timeTakenInMillis + " ms)");
+			} catch (Exception exception) {
+				progressBar.setValue(0);
+				System.out.println("Error !!");
+				exception.printStackTrace();
+			}
 			stopWaiting();
 			btnParseFile.setEnabled(true);
 		}
@@ -364,7 +395,7 @@ public class SynchronousConsole {
 		}
 	}
 
-	private void printOnSameLine(String string) throws BadLocationException {
+	private void printRemovableLine(String string) throws BadLocationException {
 		removeLastLine();
 		Document resultPaneDocument = resultTextPane.getDocument();
 		resultPaneDocument.insertString(resultPaneDocument.getLength(), LINE_SEPARATOR + string, null);

@@ -19,6 +19,7 @@ public abstract class SynchronousConsoleUtil {
 	public static final String USER_NAME = System.getProperty("user.name");
 
 	private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
+	public static final String USER_HOME_DIRECTORY_PATH = System.getProperty("user.home");
 
 	public static int lineCount(File file) {
 		int noOfLines = -1;
