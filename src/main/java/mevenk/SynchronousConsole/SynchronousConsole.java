@@ -53,7 +53,7 @@ public class SynchronousConsole {
 
 	private JFrame frameSynchronousConsole;
 
-	private JButton btnDisplayDate;
+	private JButton btnPrintDate;
 
 	private JButton btnSelectFile;
 	private JLabel lblSelectedfile;
@@ -137,15 +137,15 @@ public class SynchronousConsole {
 		resultTextPane.setForeground(Color.WHITE);
 		resultTextPane.setBackground(Color.BLACK);
 
-		btnDisplayDate = new JButton("Display Date");
-		btnDisplayDate.setFont(new Font("Tahoma", Font.BOLD, 12));
-		btnDisplayDate.addActionListener(new ActionListener() {
+		btnPrintDate = new JButton("Print Date");
+		btnPrintDate.setFont(new Font("Tahoma", Font.BOLD, 12));
+		btnPrintDate.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				System.out.println(new Date());
 			}
 		});
-		btnDisplayDate.setBounds(10, 11, 125, 30);
-		frameSynchronousConsole.getContentPane().add(btnDisplayDate);
+		btnPrintDate.setBounds(10, 11, 125, 30);
+		frameSynchronousConsole.getContentPane().add(btnPrintDate);
 
 		btnSelectFile = new JButton("File");
 		btnSelectFile.addActionListener(new ActionListener() {
@@ -184,6 +184,11 @@ public class SynchronousConsole {
 				resultTextPane.setText("");
 				progressBar.setValue(0);
 				progressBar.setString(null);
+
+				if (selectedFile == null || !selectedFile.exists()) {
+					System.out.println("Select a File !!");
+					return;
+				}
 
 				System.out.println("Selected File : " + selectedFile.getPath());
 
@@ -386,7 +391,7 @@ public class SynchronousConsole {
 	}
 
 	private void toggleEnableButtons() {
-		toggleEnable(btnDisplayDate, btnSelectFile, btnParseFile);
+		toggleEnable(btnPrintDate, btnSelectFile, btnParseFile);
 	}
 
 	private void toggleEnable(Component... components) {
